@@ -5,10 +5,8 @@ import os
 # =========================
 # CONFIG
 # =========================
-OLLAMA_URL = os.getenv("OLLAMA_URL")  # from Streamlit Secrets
-st.write("Using Ollama URL:", OLLAMA_URL)
-
 MODEL = "phi3"
+OLLAMA_URL = os.getenv("OLLAMA_URL")
 
 st.set_page_config(
     page_title="MuseApp Chatbot",
@@ -19,17 +17,18 @@ st.set_page_config(
 # SAFETY CHECK
 # =========================
 if not OLLAMA_URL:
-    st.error("❌ OLLAMA_URL is not set. Please configure it in Streamlit Secrets.")
+    st.error("❌ OLLAMA_URL is missing in Streamlit Secrets")
     st.stop()
 
 # =========================
-# UI HEADER
+# HEADER
 # =========================
 st.title("🎨 MuseApp Chatbot")
 st.caption("Cloud UI • Local LLaMA (via HTTP)")
+st.write("Using Ollama URL:", OLLAMA_URL)
 
 # =========================
-# CONVERSATION MEMORY
+# SESSION MEMORY
 # =========================
 if "chat" not in st.session_state:
     st.session_state.chat = [
@@ -39,7 +38,9 @@ if "chat" not in st.session_state:
         }
     ]
 
-# Display chat history
+# =========================
+# DISPLAY CHAT HISTORY
+# =========================
 for msg in st.session_state.chat:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
@@ -50,7 +51,7 @@ for msg in st.session_state.chat:
 user_input = st.chat_input("Type your message...")
 
 if user_input:
-    # Add user message
+    # Save user message
     st.session_state.chat.append(
         {"role": "user", "content": user_input}
     )
@@ -59,51 +60,56 @@ if user_input:
         st.write(user_input)
 
     # =========================
-    # CALL OLLAMA (HTTP)
+    # BUILD PROMPT (MEMORY)
     # =========================
+    prompt = "\n".join(
+        f"{m['role']}: {m['content']}"
+        for m in st.session_state.chat
+    )
+    prompt += "\nassistant:"
+
     payload = {
         "model": MODEL,
-        "messages": st.session_state.chat,
+        "prompt": prompt,
         "stream": False
     }
 
+    # =========================
+    # OLLAMA CALL (WORKING)
+    # =========================
     try:
         response = requests.post(
-    f"{OLLAMA_URL}/api/chat",
-    json=payload,
-    headers={
-        "Content-Type": "application/json",
-        "ngrok-skip-browser-warning": "true"
-    },
-    timeout=120
-)
-
-    except requests.exceptions.RequestException as e:
-        st.error("❌ Failed to connect to Ollama")
+            f"{OLLAMA_URL}/api/generate",
+            json=payload,
+            headers={
+                "Content-Type": "application/json",
+                "ngrok-skip-browser-warning": "true"
+            },
+            timeout=120
+        )
+    except Exception as e:
+        st.error("❌ Could not connect to Ollama")
         st.text(str(e))
         st.stop()
 
     # =========================
-    # HANDLE NON-200 RESPONSES
+    # ERROR HANDLING
     # =========================
     if response.status_code != 200:
         st.error(f"❌ Ollama returned HTTP {response.status_code}")
         st.text(response.text)
         st.stop()
 
-    # =========================
-    # SAFE JSON PARSING
-    # =========================
     try:
         data = response.json()
-        answer = data["message"]["content"]
+        answer = data.get("response", "").strip()
     except Exception:
-        st.error("❌ Ollama response was not valid JSON")
+        st.error("❌ Invalid JSON from Ollama")
         st.text(response.text)
         st.stop()
 
     # =========================
-    # DISPLAY ASSISTANT MESSAGE
+    # DISPLAY & SAVE RESPONSE
     # =========================
     with st.chat_message("assistant"):
         st.write(answer)
