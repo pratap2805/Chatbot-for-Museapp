@@ -6,7 +6,6 @@ import os
 # CONFIG
 # -------------------------
 OLLAMA_URL = os.getenv("OLLAMA_URL")
-
 MODEL = "phi3"
 
 # -------------------------
@@ -18,7 +17,7 @@ st.title("🎨 MuseApp Chatbot")
 st.write("Cloud UI + Local LLaMA (via Cloudflare)")
 
 # -------------------------
-# Memory
+# Conversation memory
 # -------------------------
 if "chat" not in st.session_state:
     st.session_state.chat = [
