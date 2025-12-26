@@ -69,10 +69,15 @@ if user_input:
 
     try:
         response = requests.post(
-            f"{OLLAMA_URL}/api/chat",
-            json=payload,
-            timeout=120
-        )
+    f"{OLLAMA_URL}/api/chat",
+    json=payload,
+    headers={
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true"
+    },
+    timeout=120
+)
+
     except requests.exceptions.RequestException as e:
         st.error("❌ Failed to connect to Ollama")
         st.text(str(e))
