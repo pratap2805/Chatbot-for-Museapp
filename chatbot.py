@@ -6,6 +6,8 @@ import os
 # CONFIG
 # =========================
 OLLAMA_URL = os.getenv("OLLAMA_URL")  # from Streamlit Secrets
+st.write("Using Ollama URL:", OLLAMA_URL)
+
 MODEL = "phi3"
 
 st.set_page_config(
