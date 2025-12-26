@@ -1,0 +1,17 @@
+Artists can register on MuseApp by creating an account.
+
+Artists must complete their profile with bio, skills, experience, and portfolio.
+
+Portfolio can include images, videos, or audio.
+
+Artists can set pricing as hourly, fixed, or custom.
+
+Artists define a working radius which controls where customers can book them.
+
+Artists manage availability using a calendar.
+
+Artists receive booking requests and can accept or reject them.
+
+Artists get paid after successful booking completion.
+
+Artists can update pricing and availability anytime.

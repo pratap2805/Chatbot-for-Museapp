@@ -1,0 +1,14 @@
+MuseApp is a digital platform that connects artists and customers.
+
+Artists such as dancers, singers, painters, musicians, and performers can create profiles on MuseApp.
+Artists can upload portfolios, define pricing, availability, and working radius.
+
+Customers can explore artist profiles, view portfolios, read reviews, and book artists.
+
+MuseApp works like a professional network for artists where bookings are managed digitally.
+
+Bookings depend on artist availability and working radius.
+
+Payments are handled securely through MuseApp.
+
+Cancellations depend on the artist's cancellation policy.
