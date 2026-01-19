@@ -1,119 +1,121 @@
-import streamlit as st
-import requests
 import os
+import streamlit as st
+import faiss
+import pickle
+from sentence_transformers import SentenceTransformer
+import ollama
 
-# =========================
-# CONFIG
-# =========================
+# -------------------- FORCE OLLAMA HOST --------------------
+os.environ["OLLAMA_HOST"] = "http://127.0.0.1:11434"
+
+# -------------------- CONFIG --------------------
 MODEL = "phi3"
-OLLAMA_URL = os.getenv("OLLAMA_URL")
+MAX_HISTORY = 4  # keep small for speed
 
-st.set_page_config(
-    page_title="MuseApp Chatbot",
-    page_icon="🎨"
-)
+# -------------------- PAGE SETUP --------------------
+st.set_page_config(page_title="MuseApp Chatbot", layout="centered")
+st.title("🎭 MuseApp Chatbot")
+st.caption("Local AI Assistant for Artists & Customers")
 
-# =========================
-# SAFETY CHECK
-# =========================
-if not OLLAMA_URL:
-    st.error("❌ OLLAMA_URL is missing in Streamlit Secrets")
-    st.stop()
+# -------------------- ROLE SELECTION --------------------
+role = st.radio("Who are you?", ["Customer", "Artist"], horizontal=True)
 
-# =========================
-# HEADER
-# =========================
-st.title("🎨 MuseApp Chatbot")
-st.caption("Cloud UI • Local LLaMA (via HTTP)")
-st.write("Using Ollama URL:", OLLAMA_URL)
+# -------------------- LOAD VECTOR STORE --------------------
+@st.cache_resource
+def load_vector_store():
+    index = faiss.read_index("faiss_index/index.faiss")
+    with open("faiss_index/docs.pkl", "rb") as f:
+        docs = pickle.load(f)
+    return index, docs
 
-# =========================
-# SESSION MEMORY
-# =========================
-if "chat" not in st.session_state:
-    st.session_state.chat = [
-        {
-            "role": "assistant",
-            "content": "Hi! I’m the MuseApp assistant. How can I help you today?"
-        }
-    ]
+index, documents = load_vector_store()
 
-# =========================
-# DISPLAY CHAT HISTORY
-# =========================
-for msg in st.session_state.chat:
+# -------------------- LOAD EMBEDDINGS --------------------
+@st.cache_resource
+def load_embedder():
+    return SentenceTransformer("all-MiniLM-L6-v2")
+
+embedder = load_embedder()
+
+# -------------------- SESSION MEMORY --------------------
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# -------------------- DISPLAY CHAT HISTORY --------------------
+for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
 
-# =========================
-# USER INPUT
-# =========================
-user_input = st.chat_input("Type your message...")
+# -------------------- VECTOR SEARCH --------------------
+def retrieve_context(query, k=3):
+    q_emb = embedder.encode([query])
+    _, idx = index.search(q_emb, k)
+    return "\n".join([documents[i] for i in idx[0]])
+
+# -------------------- USER INPUT --------------------
+user_input = st.chat_input("Ask something about MuseApp...")
 
 if user_input:
-    # Save user message
-    st.session_state.chat.append(
+    # Store user message
+    st.session_state.messages.append(
         {"role": "user", "content": user_input}
     )
 
     with st.chat_message("user"):
         st.write(user_input)
 
-    # =========================
-    # BUILD PROMPT (MEMORY)
-    # =========================
-    prompt = "\n".join(
-        f"{m['role']}: {m['content']}"
-        for m in st.session_state.chat
+    # Retrieve KB context
+    context = retrieve_context(user_input)
+
+    # Short conversation history (FAST)
+    history = "\n".join(
+        m["content"]
+        for m in st.session_state.messages[-MAX_HISTORY:]
     )
-    prompt += "\nassistant:"
 
-    payload = {
-        "model": MODEL,
-        "prompt": prompt,
-        "stream": False
-    }
+    # -------------------- CLEAN PROMPT --------------------
+    prompt = f"""
+You are the MuseApp assistant.
 
-    # =========================
-    # OLLAMA CALL (WORKING)
-    # =========================
+User type: {role}
+
+Answer clearly and directly.
+Do NOT repeat instructions or metadata.
+Use the context only if helpful.
+
+Context:
+{context}
+
+Conversation:
+{history}
+
+Respond to the user's last message.
+"""
+
+    # -------------------- OLLAMA CALL (LOCAL, STABLE) --------------------
     try:
-        response = requests.post(
-            f"{OLLAMA_URL}/api/generate",
-            json=payload,
-            headers={
-                "Content-Type": "application/json",
-                "ngrok-skip-browser-warning": "true"
-            },
-            timeout=120
+        response = ollama.generate(
+            model=MODEL,
+            prompt=prompt,
+            options={
+                "temperature": 0.3,
+                "num_predict": 200
+            }
         )
+        answer = response["response"].strip()
+
     except Exception as e:
-        st.error("❌ Could not connect to Ollama")
-        st.text(str(e))
+        st.error("❌ Ollama is not reachable. Make sure `ollama run phi3` is running.")
         st.stop()
 
-    # =========================
-    # ERROR HANDLING
-    # =========================
-    if response.status_code != 200:
-        st.error(f"❌ Ollama returned HTTP {response.status_code}")
-        st.text(response.text)
-        st.stop()
+    # Store assistant reply
+    st.session_state.messages.append(
+        {"role": "assistant", "content": answer}
+    )
 
-    try:
-        data = response.json()
-        answer = data.get("response", "").strip()
-    except Exception:
-        st.error("❌ Invalid JSON from Ollama")
-        st.text(response.text)
-        st.stop()
-
-    # =========================
-    # DISPLAY & SAVE RESPONSE
-    # =========================
     with st.chat_message("assistant"):
         st.write(answer)
 
-    st.session_state.chat.append(
-        {"role": "assistant", "content": answer}
-    )
+    # -------------------- OPTIONAL BOOKING CTA --------------------
+    if "book" in user_input.lower():
+        st.markdown("🔗 **Book an artist:** https://museapp.com/book")
